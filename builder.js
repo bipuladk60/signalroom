@@ -76,12 +76,20 @@
   function renderChips() {
     const cur = window.SDE.current()
     const t = cur ? cur.title : 'Load Balancing'
-    const ideas = [
-      `Go further: pros and cons of ${t}`,
-      `Low-level design of ${t}`,
-      'Consistent hashing',
-      'How a chat app delivers messages',
-    ]
+    const coding = window.SDE.section && window.SDE.section() === 'dsa'
+    const ideas = coding
+      ? [
+          'Walk me through the solution line by line and explain every built-in so I never forget it',
+          'Explain the tricky parts of my code, with memory tricks',
+          `Concept: why the ${t} pattern works, with an analogy and a quiz`,
+          'Concept: Python lists vs deque vs heapq, when to use which',
+        ]
+      : [
+          `Go further: pros and cons of ${t}`,
+          `Low-level design of ${t}`,
+          'Concept: SQL vs NoSQL so I never forget the difference',
+          'How a chat app delivers messages',
+        ]
     chips.innerHTML = ideas.map((s) => `<button type="button" class="builder-chip">${s.replace(/[&<>"]/g, '')}</button>`).join('')
   }
   renderChips()
@@ -94,8 +102,9 @@
   /* ---------------- the request to Claude ---------------- */
   const SPEC = `You design lessons for "System Design Explorer", a website that teaches system design by animating requests moving between components on an isometric diagram, step by step. Each step has a short explanation panel, a plain-language narration box that types out one sentence at a time, and a request log. The site lays out the diagram itself; you only describe the content.
 
-Reply with ONLY one JSON object, no prose, in exactly this shape:
+Reply with ONLY one JSON object, no prose. For format "diagram" use exactly this shape:
 {
+  "format": "diagram",
   "name": "SHORT NAME",                 // uppercase, max 18 characters, e.g. "LB INTERNALS"
   "title": "Lesson Title",              // 2-4 words
   "full": "One-line subtitle",
@@ -134,7 +143,48 @@ Quality rules:
 - Be technically correct and specific: real protocols, real numbers, realistic timings and sizes.
 - Each step: 3-10 events; start with a "say". Show the mechanism, not just a description of it.
 - Every send must follow links (add the links you need). Use only node ids you defined.
-- Teach for a beginner who wants to really understand: cause and effect, why it is designed this way, what would break without it.`
+- Teach for a beginner who wants to really understand: cause and effect, why it is designed this way, what would break without it.
+
+FORMATS. First decide HOW this learner wants to be taught, and pick exactly one format:
+- "diagram": systems, architecture, requests or data moving between components, algorithms on structures you can draw. Use the diagram shape above (with "format": "diagram").
+- "code": the learner wants to go through code: "explain this code", "line by line", "every built-in function", "what does this line do", reading a solution. Walk through the real code (the code they pasted, or the editor code given below) verbatim, top to bottom.
+- "concept": ideas and intuition rather than moving parts: "X vs Y", trade-offs, "explain like...", "help me never forget", mental models, when to use what.
+Never force a diagram onto a request that is about reading code or understanding a concept.
+
+Shape for "code":
+{
+  "format": "code", "name": "SHORT NAME", "title": "Lesson Title", "full": "One-line subtitle", "summary": "2-3 sentences",
+  "facts": [["Label", "Value"], ...],
+  "source": {"lang": "python", "text": "the exact code, using real line breaks"},
+  "steps": [ { "title": "...", "desc": "...", "detail": "2-4 sentences", "facts": [["Label","Value"]],
+    "events": [
+      {"focus": {"lines": [3, 4], "token": "enumerate"}},
+      {"say": "plain spoken explanation of what is highlighted"},
+      {"card": {"title": "enumerate(nums)", "kind": "built-in", "what": "what it does, in plain words",
+                "hook": "a vivid memory hook: an image, story, rhyme or exaggeration that makes it impossible to forget",
+                "example": {"code": "a tiny runnable example", "out": "its exact output"},
+                "gotcha": "the classic mistake people make with it"}},
+      {"quiz": {"q": "question", "options": ["A", "B", "C"], "answer": 1, "why": "why that answer is right"}}
+    ]} ],
+  "outro": {"title": "...", "desc": "...", "text": "3-4 sentence recap of the hooks", "facts": [["Label","Value"]]}
+}
+"focus" highlights lines (1-based, inclusive) and underlines "token", which must be the exact text as written on those lines. "kind" is one of: built-in, method, syntax, idiom, line, concept. Cover every built-in function, method, operator and line above beginner level, in the order they appear; skip trivial lines. One idea per card. Order inside a step: focus, then say, then card.
+
+Shape for "concept": same top-level fields as "code" but without "source", and steps use these events:
+      {"say": "..."},
+      {"slide": {"kicker": "short label", "headline": "the one idea of this step", "analogy": "an everyday analogy",
+                 "points": ["2-4 short points"],
+                 "visual": {"type": "compare", "left": {"title": "...", "items": ["..."]}, "right": {"title": "...", "items": ["..."]}}
+                       or {"type": "flow", "items": ["first", "then", "finally"]}
+                       or {"type": "big", "text": "one line worth remembering"}
+                       or {"type": "code", "code": "a short snippet"}}},
+      plus "card" and "quiz" events as above.
+
+Teaching rules for every format:
+- Make it stick: concrete examples with real values, analogies from everyday life, and a memorable hook for each key idea.
+- Put 1 to 3 quizzes across the lesson (active recall), each at the end of a step, with a short "why".
+- "say" lines are what a patient tutor sitting next to them would say out loud.
+- Example outputs must be exactly what the code prints. In text fields, wrap code in backticks.`
 
   function briefOf(lesson) {
     if (!lesson) return ''
@@ -164,6 +214,7 @@ Quality rules:
     topic = String(topic || '').trim()
     if (!topic || busy) return false
     const cur = window.SDE.current()
+    const codeCtx = window.SDE_IDE && window.SDE_IDE.codeForBuilder ? window.SDE_IDE.codeForBuilder() : null
     const all = (typeof LESSONS !== 'undefined' ? LESSONS : []).map((l) => `${l.name} (${l.title})`).join(', ')
     const prompt = `${SPEC}
 
@@ -171,7 +222,12 @@ The learner is currently viewing this lesson: ${briefOf(cur)}
 Lessons that already exist on the site: ${all}.
 If the request builds on the current lesson ("go further", "now its flaws", "deeper", "what about..."), make a follow-up lesson that starts where it left off and reuses its components where it makes sense. Otherwise make a fresh lesson on the topic.
 
-The learner asks: ${topic}`
+The learner asks: ${topic}${codeCtx ? `
+
+Code in the learner's editor (${codeCtx.label}, ${codeCtx.lang}). When they say "the code", "my code" or "this solution", this is it:
+---
+${codeCtx.text}
+---` : ''}`
 
     ctl = new AbortController()
     delete status.dataset.keep
@@ -233,6 +289,7 @@ The learner asks: ${topic}`
 
   function normalize(raw, topic) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('not an object')
+    if (raw.format === 'code' || raw.format === 'concept') return normalizeView(raw, topic)
     // nodes
     const nodes = {}
     for (const n of (Array.isArray(raw.nodes) ? raw.nodes : []).slice(0, 9)) {
@@ -339,6 +396,8 @@ The learner asks: ${topic}`
       name,
       title: str(raw.title, 32) || name,
       cat: 'mine',
+      section: window.SDE.section ? window.SDE.section() : 'sd',
+      format: 'diagram',
       tier: TIERS_OK.has(raw.tier) ? raw.tier : 'APP',
       nodes: placed,
       links: finalLinks,
@@ -352,6 +411,73 @@ The learner asks: ${topic}`
         text: rich(outro.text, 700) + ' Press REPLAY to watch it again.',
         facts: facts(outro.facts, 4),
       },
+    }
+  }
+
+  // Code walkthroughs and concept lessons: no diagram, a teaching stage instead
+  function convQuiz(q) {
+    if (!q || typeof q !== 'object') return null
+    const options = (Array.isArray(q.options) ? q.options : []).slice(0, 5).map((o) => rich(o, 180)).filter(Boolean)
+    const answer = Math.floor(Number(q.answer))
+    if (options.length < 2 || !(answer >= 0 && answer < options.length)) return null
+    return { q: rich(q.q, 260) || 'Quick check', options, answer, why: rich(q.why, 420) }
+  }
+  function convCard(c) {
+    if (!c || typeof c !== 'object') return null
+    const ex = c.example && c.example.code ? { code: String(c.example.code).slice(0, 500), out: String(c.example.out == null ? '' : c.example.out).slice(0, 240) } : null
+    const kinds = ['built-in', 'method', 'syntax', 'idiom', 'line', 'concept']
+    const kind = kinds.includes(String(c.kind).toLowerCase()) ? String(c.kind).toLowerCase() : 'concept'
+    return { title: rich(c.title, 90) || 'Idea', kind, what: rich(c.what, 600), hook: rich(c.hook, 360), example: ex, gotcha: rich(c.gotcha, 320) }
+  }
+  function convSlide(s) {
+    if (!s || typeof s !== 'object') return null
+    const v = s.visual || {}
+    const col = (c) => ({ title: rich(c && c.title, 60), items: (Array.isArray(c && c.items) ? c.items : []).slice(0, 6).map((x) => rich(x, 160)).filter(Boolean) })
+    let visual = null
+    if (v.type === 'compare' && v.left && v.right) visual = { type: 'compare', left: col(v.left), right: col(v.right) }
+    else if (v.type === 'flow' && Array.isArray(v.items)) visual = { type: 'flow', items: v.items.slice(0, 7).map((x) => rich(x, 70)).filter(Boolean) }
+    else if (v.type === 'big' && v.text) visual = { type: 'big', text: rich(v.text, 140) }
+    else if (v.type === 'code' && v.code) visual = { type: 'code', code: String(v.code).slice(0, 700) }
+    return { kicker: rich(s.kicker, 40), headline: rich(s.headline, 160) || 'Idea', analogy: rich(s.analogy, 420), points: (Array.isArray(s.points) ? s.points : []).slice(0, 6).map((p) => rich(p, 240)).filter(Boolean), visual }
+  }
+  function normalizeView(raw, topic) {
+    const format = raw.format
+    let source = null, nLines = 0
+    if (format === 'code') {
+      const src = raw.source || {}
+      const text = String(src.text || '').replace(/\r/g, '').replace(/\t/g, '    ').split('\n').slice(0, 160).join('\n')
+      if (!text.trim()) fail('no code')
+      source = { lang: str(src.lang, 20) || 'code', text }
+      nLines = text.split('\n').length
+    }
+    const steps = []
+    for (const s of (Array.isArray(raw.steps) ? raw.steps : []).slice(0, 12)) {
+      if (!s || typeof s !== 'object') continue
+      const evs = []
+      for (const e of (Array.isArray(s.events) ? s.events : []).slice(0, 32)) {
+        if (!e || typeof e !== 'object') continue
+        if (typeof e.say === 'string' && e.say.trim()) evs.push({ type: 'say', text: str(e.say, 320) })
+        else if (e.focus && format === 'code') {
+          const ls = Array.isArray(e.focus.lines) ? e.focus.lines : [e.focus.line, e.focus.line]
+          const a = Math.max(1, Math.min(nLines, Math.floor(+ls[0] || 1)))
+          const b = Math.max(a, Math.min(nLines, Math.floor(+ls[1] || a)))
+          evs.push({ type: 'focus', lines: [a, b], token: String(e.focus.token || '').slice(0, 80) })
+        } else if (e.card) { const c = convCard(e.card); if (c) evs.push({ type: 'card', card: c }) }
+        else if (e.slide) { const sl = convSlide(e.slide); if (sl) evs.push({ type: 'slide', slide: sl }) }
+        else if (e.quiz) { const q = convQuiz(e.quiz); if (q) evs.push({ type: 'quiz', quiz: q }) }
+      }
+      if (evs.length) steps.push({ title: str(s.title, 44) || `Step ${steps.length + 1}`, desc: str(s.desc, 80), detail: rich(s.detail, 800), facts: facts(s.facts, 4), events: evs })
+    }
+    if (steps.length < 2) fail('too few steps')
+    const outro = raw.outro && typeof raw.outro === 'object' ? raw.outro : {}
+    const name = str(raw.name, 18).toUpperCase() || str(raw.title, 18).toUpperCase() || 'MY LESSON'
+    return {
+      id: 'g-' + Date.now().toString(36), generated: true, prompt: str(topic, 140), createdAt: Date.now(),
+      name, title: str(raw.title, 40) || name, cat: 'mine', section: window.SDE.section ? window.SDE.section() : 'sd',
+      format, source, tier: 'APP', nodes: {}, links: [], start: [], legend: [],
+      overview: { full: str(raw.full, 80) || str(raw.title, 80), description: rich(raw.summary, 700), facts: facts(raw.facts) },
+      steps,
+      outro: { title: str(outro.title, 40) || 'Lesson complete', desc: str(outro.desc, 80), text: rich(outro.text, 800) + ' Press REPLAY to watch it again.', facts: facts(outro.facts, 4) },
     }
   }
 

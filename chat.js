@@ -35,7 +35,7 @@ How to answer:
 - If they ask about something outside the current lesson, answer briefly and point to the lesson on the site that covers it, if any.
 - Don't invent numbers that contradict the page.
 - On coding lessons the context includes the learner's code and test results. When they ask for help with it, point at the bug or give a hint first; give a full solution only if they ask for one.
-- If the learner asks you to show, animate, visualize, simulate, create, build or make a lesson, animation or diagram (for example "show me the kinds of load balancers and their pros and cons"), call the build_lesson tool with a complete, self-contained topic description, then reply in one short sentence that the lesson is being built and will open on its own. Don't explain the topic at length in that case: the lesson will.`
+- Call the build_lesson tool, then reply in one short sentence that the lesson is being built and opens on its own, when the learner asks you to: show, animate, visualize, simulate, create, build or make a lesson, animation or diagram ("show me the kinds of load balancers and their pros and cons"); go through, walk through or explain code line by line or every built-in ("go through the code and explain every built-in"); or teach a concept in a memorable way ("teach me X so I never forget", "X vs Y with a quiz"). Put the teaching style they asked for into the topic (diagram, code walkthrough, or concept slides) and don't explain at length yourself: the lesson will.`
 
   const SUMMARY_ASK = `Summarize this lesson for me as far as I've watched it. Give 3 to 6 "- " bullet points: what happened, in order, and why it matters. End with one line starting with "Key idea:" that I should remember. If I haven't started the lesson yet, summarize what the lesson will teach instead.`
 
@@ -156,7 +156,7 @@ How to answer:
   clearBtn.addEventListener('click', () => { if (!busy) { turns.length = 0; greet() } })
 
   /* ---------------- building lessons from the terminal ---------------- */
-  const WANTS_LESSON = /^\s*(show me|animate|visuali[sz]e|simulate|demonstrate)\b|\b(show|animate|visuali[sz]e|simulate|create|build|make|generate)\b[\s\S]{0,60}\b(lesson|animation|diagram|simulation|visual|demo)\b/i
+  const WANTS_LESSON = /^\s*(show me|animate|visuali[sz]e|simulate|demonstrate)\b|\b(walk me through|go through the code|line by line|never forget)\b|\b(show|animate|visuali[sz]e|simulate|create|build|make|generate)\b[\s\S]{0,60}\b(lesson|animation|diagram|simulation|visual|demo)\b/i
   function startBuild(topic) {
     if (!window.SDE.build) { line('err', 'error: lesson building is not available here.'); return 'Lesson building is not available on this page.' }
     if (window.SDE.isBuilding()) { line('err', 'a lesson is already being built. Wait for it to finish.'); return 'A lesson is already being built; ask the learner to wait for it.' }
@@ -165,10 +165,10 @@ How to answer:
   }
   const BUILD_TOOL = {
     name: 'build_lesson',
-    description: 'Build a new animated lesson on the site (components, requests moving between them, narration, step by step) and open it when ready. Use it whenever the learner asks to show, animate, visualize, simulate, create or build something, or to go further into the current lesson (pros and cons, failure modes, internals, alternatives). Returns at once; the build takes about a minute.',
+    description: 'Build a new lesson on the site and open it when ready, in the teaching style the learner wants: an animated system diagram (requests moving between components), a line-by-line code walkthrough (highlighted code plus a card for every built-in or tricky line, with memory hooks, tiny examples and quizzes; it uses the code in their editor), or concept slides (analogies, comparisons, quizzes). Use it whenever the learner asks to show, animate, walk through or explain code, teach a concept memorably, or go further into the current lesson. Returns at once; the build takes about a minute.',
     inputSchema: {
       type: 'object',
-      properties: { topic: { type: 'string', description: 'A complete, self-contained description of the lesson to build, e.g. "The kinds of load balancers (DNS, L4, L7, hardware vs software): how each routes traffic, their pros and cons, and how teams mitigate the cons".' } },
+      properties: { topic: { type: 'string', description: 'A complete, self-contained description of the lesson to build, including the style, e.g. "Code walkthrough of the code in my editor: explain every built-in and every non-beginner line with memory hooks" or "Diagram: the kinds of load balancers (DNS, L4, L7), their pros and cons and mitigations".' } },
       required: ['topic'],
     },
     execute(input) {
