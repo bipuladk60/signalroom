@@ -16,7 +16,8 @@ Two sections, switched from the header:
 - **Scope**: smooth pan and zoom (wheel, drag with glide, pinch), diagram and sequence views, step-by-step playback with narration at reading speed.
 - **Code Lab**: full problem statements with examples, constraints and follow-ups; a Python (default) or JavaScript editor; **Run** against the examples, **Submit** against the full suite including edge cases and large inputs with a time limit. Code runs in a Web Worker, so infinite loops are stopped instead of freezing the page.
 - **Real Python**: CPython 3.12 via [Pyodide](https://pyodide.org), bundled in `pyodide/`. The standard library ships as plain source (`stdlib.json`) and is packed into an in-memory archive when Python starts.
-- **Claude terminal**: ask about whatever is on screen, press **summarize**, or say "show me…" to have Claude build a brand-new animated lesson. When published as a Claude artifact, these use the viewer's own Claude plan; elsewhere they stay hidden.
+- **Claude terminal**: ask about whatever is on screen, press **summarize**, or say "show me…" to have Claude build a brand-new lesson. When published as a Claude artifact, these use the viewer's own Claude plan; elsewhere they stay hidden.
+- **Lessons shaped by what you ask**: Claude picks the teaching style that fits your question. You get an animated architecture diagram for "how does a load balancer work", a line-by-line code walkthrough with quizzes for "go through the code and explain every built-in", or a concept lesson with analogies and comparisons. Lessons built in the Coding section come with a matching practice problem, so you can pause at any point and try it in the Code Lab.
 - Night and day themes, progress tracking, and lessons you build saved privately to your Claude account.
 
 ## Run it locally
@@ -60,6 +61,14 @@ node tools/verify-dsa.js
 ```
 
 Runs each JavaScript reference solution against its full test suite (including the generated large inputs) and checks that every animation event points at a real component.
+
+## Contributing
+
+The project is open source and contributions are welcome: new lessons, new problems, bug fixes, UI polish. Please **open an issue before starting a pull request** for anything bigger than a small fix. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+[MIT](LICENSE) © Bipul Adhikari
 
 ## Credits
 
