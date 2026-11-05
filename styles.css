@@ -677,3 +677,5 @@ body.mode-dsa .back-code { display: inline-block; }
 .feed-item.note .fi-info { white-space: normal; }
 @media (max-width: 1080px) { .tv-code { grid-template-columns: minmax(0, 1fr); } .tv-src { position: static; } .tv-pre { max-height: 300px; } }
 @media (max-width: 760px) { .lesson-view { padding: 56px 10px 140px; } .tv-headline { font-size: 22px; line-height: 28px; } .tv-compare { grid-template-columns: minmax(0, 1fr); } .tv-vs { justify-self: center; } }
+
+.t-code { margin: 6px 0; padding: 8px 10px; border-left: 2px solid #35d0e0; background: rgba(255, 255, 255, 0.04); font-family: var(--font-mono); font-size: 12.5px; line-height: 19px; color: #d6dee2; white-space: pre-wrap; word-break: break-word; }

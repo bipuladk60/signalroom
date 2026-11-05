@@ -31,11 +31,15 @@
 How to answer:
 - Use the page context sent with each message: the lesson, the step the learner is on, the narration, the components on the diagram and the requests so far. Refer to those concrete things by name ("the Cache answered MISS in request #3").
 - Plain, natural language for a beginner. Explain cause and effect: "when this happens, this happens because...". A short everyday analogy helps when it fits.
-- Keep it short: 2 to 5 sentences, or a few "- " bullet points. **Bold** only key terms. No headings, no tables.
+- For ordinary questions keep it short: 2 to 5 sentences, or a few "- " bullet points. **Bold** only key terms. No headings, no tables.
+- When they ask you to explain code or a solution, be complete instead: show the code in a fenced code block, then go through it line by line, saying what each line does and WHY it is written that way (what the obvious alternative would be and why it is worse).
 - If they ask about something outside the current lesson, answer briefly and point to the lesson on the site that covers it, if any.
 - Don't invent numbers that contradict the page.
-- On coding lessons the context includes the learner's code and test results. When they ask for help with it, point at the bug or give a hint first; give a full solution only if they ask for one.
-- Call the build_lesson tool, then reply in one short sentence that the lesson is being built and opens on its own, when the learner asks you to: show, animate, visualize, simulate, create, build or make a lesson, animation or diagram ("show me the kinds of load balancers and their pros and cons"); go through, walk through or explain code line by line or every built-in ("go through the code and explain every built-in"); or teach a concept in a memorable way ("teach me X so I never forget", "X vs Y with a quiz"). Put the teaching style they asked for into the topic (diagram, code walkthrough, or concept slides) and don't explain at length yourself: the lesson will.`
+- On coding lessons the context includes the problem, the learner's editor (and whether they have written anything), their last test results, and the reference solution. Work out which situation you're in:
+  a) They are debugging their own attempt (their editor has their code and they ask what's wrong or why a test fails): point at the bug or give a hint first; give the full solution only if they ask for it.
+  b) They ask you to explain "the code" or the solution, ask why something is done a certain way, or say they don't know where to start: teach it fully, right away. If their editor is empty or still the starter template, "the code" means the reference solution. Never refuse or stall because the editor is empty, and don't ask them to write code first.
+- "Why did you do X?" about the solution or lesson means: explain the reasoning behind that choice.
+- Call the build_lesson tool, then reply in one short sentence that the lesson is being built and opens on its own, when the learner asks you to: show, animate, visualize, simulate, create, build or make a lesson, animation or diagram ("show me the kinds of load balancers and their pros and cons"); turn code into a lesson: walk through or go through the code line by line, explain every built-in, or "make it a lesson" ("go through the code and explain every built-in"); or teach a concept in a memorable way ("teach me X so I never forget", "X vs Y with a quiz"). Put the teaching style they asked for into the topic (diagram, code walkthrough, or concept slides) and don't explain at length yourself: the lesson will.`
 
   const SUMMARY_ASK = `Summarize this lesson for me as far as I've watched it. Give 3 to 6 "- " bullet points: what happened, in order, and why it matters. End with one line starting with "Key idea:" that I should remember. If I haven't started the lesson yet, summarize what the lesson will teach instead.`
 
@@ -49,14 +53,22 @@ How to answer:
   function md(text) {
     const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>')
     const html = []
-    let list = null
+    let list = null, fence = null
     for (const line of text.split('\n')) {
+      // fenced code blocks: ``` ... ``` (shown as-is, even while still streaming in)
+      if (/^\s*```/.test(line)) {
+        if (fence) { html.push(`<pre class="t-code">${esc(fence.join('\n'))}</pre>`); fence = null }
+        else { if (list) { html.push(`<ul>${list.join('')}</ul>`); list = null } fence = [] }
+        continue
+      }
+      if (fence) { fence.push(line); continue }
       const m = line.match(/^\s*(?:[-*•]|\d+\.)\s+(.*)$/)
       if (m) { (list = list || []).push(`<li><span>${inline(m[1])}</span></li>`); continue }
       if (list) { html.push(`<ul>${list.join('')}</ul>`); list = null }
       if (line.trim()) html.push(`<p>${inline(line)}</p>`)
     }
     if (list) html.push(`<ul>${list.join('')}</ul>`)
+    if (fence) html.push(`<pre class="t-code">${esc(fence.join('\n'))}</pre>`)
     return html.join('')
   }
   function line(cls, html) {
@@ -156,7 +168,7 @@ How to answer:
   clearBtn.addEventListener('click', () => { if (!busy) { turns.length = 0; greet() } })
 
   /* ---------------- building lessons from the terminal ---------------- */
-  const WANTS_LESSON = /^\s*(show me|animate|visuali[sz]e|simulate|demonstrate)\b|\b(walk me through|go through the code|line by line|never forget)\b|\b(show|animate|visuali[sz]e|simulate|create|build|make|generate)\b[\s\S]{0,60}\b(lesson|animation|diagram|simulation|visual|demo)\b/i
+  const WANTS_LESSON = /^\s*(show me|animate|visuali[sz]e|simulate|demonstrate)\b|\b(walk me through|go through the code|line by line|never forget|make (it|this) (a|into a) lesson)\b|\b(show|animate|visuali[sz]e|simulate|create|build|make|generate)\b[\s\S]{0,60}\b(lesson|animation|diagram|simulation|visual|demo)\b/i
   function startBuild(topic) {
     if (!window.SDE.build) { line('err', 'error: lesson building is not available here.'); return 'Lesson building is not available on this page.' }
     if (window.SDE.isBuilding()) { line('err', 'a lesson is already being built. Wait for it to finish.'); return 'A lesson is already being built; ask the learner to wait for it.' }

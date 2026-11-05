@@ -1525,7 +1525,8 @@
       })
       if (parts.length) out.push(`Components on the diagram: ${parts.join(', ')}.`)
       if (lesson.cat === 'dsa' && S.ds) {
-        const show = (id) => `${name(id)}${S.ds.vals[id] != null && S.ds.vals[id] !== lesson.nodes[id].name ? `=${S.ds.vals[id]}` : ''}${S.ds.marks[id] ? `(${S.ds.marks[id]})` : ''}`
+        // label each value with what it is (its index or role), so e.g. the target isn't mistaken for an array element
+        const show = (id) => { const nd = lesson.nodes[id]; const v = S.ds.vals[id] != null ? S.ds.vals[id] : nd.name; return `${nd.sub ? `${nd.sub}=` : ''}${v}${S.ds.marks[id] ? ` (${S.ds.marks[id]})` : ''}` }
         const cells = Object.keys(lesson.nodes).filter((id) => lesson.nodes[id].type !== 'box' && S.vis.has(id))
         if (cells.length) out.push(`Data on screen: ${cells.map(show).join(', ')}.`)
         for (const id in S.ds.rows) if (S.ds.rows[id].length) out.push(`${lesson.nodes[id].name}: ${S.ds.rows[id].join(' | ')}`)
