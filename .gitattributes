@@ -1,0 +1,5 @@
+* text=auto eol=lf
+
+# vendored runtime: keep byte-for-byte identical to upstream
+pyodide/** -text
+*.wasm binary
