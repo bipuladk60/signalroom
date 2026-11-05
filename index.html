@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>System Design in Motion</title>
+    <meta name="description" content="Watch a system work, request by request: interactive lessons on load balancing, CDNs, rate limiting, caching, replication, sharding, message queues, circuit breakers and a full URL shortener design." />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23131619'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%2335d0e0' stroke-width='1.6'/%3E%3Cpath d='M16 16 L24 10' stroke='%23ffb000' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='21' cy='20' r='2' fill='%23ffb000'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <script>
+      // theme before first paint: a choice made here wins, then one the host page set explicitly; the console's native look is dark
+      try {
+        const saved = localStorage.getItem('sde:theme')
+        const host = document.documentElement.dataset.theme
+        document.documentElement.dataset.theme = saved || host || 'dark'
+      } catch {
+        document.documentElement.dataset.theme = 'dark'
+      }
+    </script>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <header class="bar">
+        <button type="button" class="key rail-toggle" aria-label="Show lessons" aria-controls="rail" aria-expanded="false">
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </button>
+        <div class="mark">
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <rect width="32" height="32" rx="6" fill="var(--panel-2)" stroke="var(--bezel-2)" />
+            <circle cx="16" cy="16" r="10" fill="none" stroke="var(--cyan)" stroke-width="1.5" />
+            <circle cx="16" cy="16" r="5" fill="none" stroke="var(--cyan)" stroke-width="1" opacity="0.5" />
+            <path d="M16 16 L24 10" stroke="var(--amber)" stroke-width="2" stroke-linecap="round" />
+            <circle cx="21" cy="20" r="2" fill="var(--amber)" />
+          </svg>
+          <span class="mark-name">System Design <b>in Motion</b></span>
+        </div>
+        <div class="sections" role="tablist" aria-label="Section">
+          <button type="button" role="tab" data-section="sd" class="is-active" aria-selected="true">System design</button>
+          <button type="button" role="tab" data-section="dsa" aria-selected="false">Coding (DSA)</button>
+        </div>
+        <div class="readout">
+          <div class="r-lesson"><span class="label">Lesson</span><span class="val"></span></div>
+          <div class="r-step"><span class="label">Step</span><span class="val cyan"></span></div>
+          <div class="r-state"><span class="label">Status</span><span class="val"></span></div>
+        </div>
+        <div class="bar-tools">
+          <div class="gauge" title="Lessons completed">
+            <span class="label">Done</span>
+            <span class="gauge-segs"></span>
+            <span class="gauge-val"></span>
+          </div>
+          <button type="button" class="key theme-btn" aria-label="Switch between night and day mode"><span class="theme-label">Day</span></button>
+        </div>
+      </header>
+
+      <aside class="rail" id="rail" aria-label="Lessons">
+        <form class="panel builder" hidden autocomplete="off">
+          <div class="panel-head"><span class="led cyan"></span><label for="build-input" class="label">Build a lesson</label><span class="ch">CLAUDE</span></div>
+          <div class="builder-body">
+            <div class="builder-row">
+              <input id="build-input" type="text" maxlength="200" placeholder="any system design topic…" />
+              <button type="submit" class="key builder-go">Build</button>
+            </div>
+            <div class="builder-chips"></div>
+            <div class="builder-status" hidden aria-live="polite">
+              <span class="builder-msg"></span>
+              <button type="button" class="builder-stop" hidden>Stop</button>
+            </div>
+          </div>
+        </form>
+        <section class="panel channels">
+          <div class="panel-head"><span class="led on"></span><span class="label">Channels</span><span class="ch channel-count"></span></div>
+          <nav class="lesson-groups panel-body"></nav>
+        </section>
+      </aside>
+
+      <main class="stage-col">
+        <section class="panel stage" aria-label="Diagram">
+          <div class="panel-head">
+            <span class="led amber stage-led"></span><span class="label">Scope</span>
+            <div class="view-switch" role="tablist" aria-label="View" title="Switch view (V)">
+              <button type="button" role="tab" data-view="network" class="is-active" aria-selected="true">Diagram</button>
+              <button type="button" role="tab" data-view="sequence" aria-selected="false">Sequence</button>
+              <i class="view-indicator"></i>
+            </div>
+            <div class="packet-legend"></div>
+          </div>
+          <div class="scope">
+            <div class="scope-grid"></div>
+            <svg class="network" id="net" role="img" aria-label="System diagram">
+              <g class="lanes"></g>
+              <g class="nodes"></g>
+              <g class="fx"></g>
+            </svg>
+            <div class="scope-scan"></div>
+            <div class="zoom-ctl" role="group" aria-label="Zoom">
+              <button type="button" class="zoom-btn" data-zoom="in" title="Zoom in (+ or scroll)" aria-label="Zoom in">+</button>
+              <button type="button" class="zoom-btn" data-zoom="out" title="Zoom out (−)" aria-label="Zoom out">−</button>
+              <button type="button" class="zoom-btn fit" data-zoom="fit" title="Fit everything (0 or double-click)">Fit</button>
+              <span class="zoom-val">AUTO</span>
+            </div>
+            <div class="scope-vignette"></div>
+            <div class="sequence">
+              <div class="seq-head"><div class="seq-head-track"></div></div>
+              <div class="seq-scroll"><svg class="seq-svg"></svg></div>
+            </div>
+            <button type="button" class="key start-btn" data-action="start">
+              <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.8 12 7l-9 5.2Z" fill="currentColor"/></svg>
+              <span class="start-label">Start lesson</span><kbd>Space</kbd>
+            </button>
+            <div class="narrate" hidden aria-live="polite">
+              <div class="narrate-head"><span class="narrate-label">Live narration</span><span class="narrate-step"></span></div>
+              <ol class="narrate-lines"></ol>
+            </div>
+          </div>
+        </section>
+
+        <div class="panel stepper">
+          <div class="transport">
+            <button type="button" class="key" data-action="prev" title="Previous step (←)" aria-label="Previous step">
+              <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 2v10M11.5 2.5 5 7l6.5 4.5Z" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+            </button>
+            <button type="button" class="key play-btn" data-action="toggle" title="Play / pause (Space)" aria-label="Play"></button>
+            <button type="button" class="key" data-action="step" title="Next step (→)" aria-label="Next step">
+              <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true"><path d="M11 2v10M2.5 2.5 9 7l-6.5 4.5Z" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+            </button>
+            <button type="button" class="key speed-btn" data-action="speed" title="Playback speed">1×</button>
+          </div>
+          <ol class="step-track"></ol>
+        </div>
+
+        <section class="panel term" hidden aria-label="Ask Claude">
+          <div class="panel-head">
+            <span class="led cyan"></span><span class="label">Claude</span>
+            <span class="term-ctx"></span>
+            <div class="term-actions">
+              <button type="button" class="term-btn primary" data-term="summarize" title="Summarize what this lesson has shown so far">Summarize</button>
+              <button type="button" class="term-btn" data-term="clear" title="Clear the conversation">Clear</button>
+              <button type="button" class="term-btn" data-term="expand" aria-pressed="false" title="Make the terminal bigger for reading (or double-click its header)">Expand</button>
+            </div>
+          </div>
+          <div class="term-body">
+            <div class="term-log" aria-live="polite"></div>
+            <form class="term-form" autocomplete="off">
+              <span class="term-prompt" aria-hidden="true">❯</span>
+              <input id="term-input" type="text" maxlength="600" placeholder="ask a question, or say &quot;show me…&quot; to build a new lesson" aria-label="Ask Claude" />
+              <button type="submit" class="term-send">send ↵</button>
+            </form>
+          </div>
+        </section>
+      </main>
+
+      <aside class="side" aria-label="Requests">
+        <section class="panel feed-card">
+          <div class="panel-head"><span class="led on feed-led"></span><span class="label">Signal log</span><span class="feed-count"></span><button type="button" class="term-btn back-code" data-side="code">Code</button></div>
+          <ol class="feed"></ol>
+        </section>
+        <section class="panel ide" aria-label="Code lab">
+          <div class="panel-head">
+            <span class="led cyan"></span><span class="label">Code lab</span>
+            <span class="ide-status"></span>
+            <button type="button" class="term-btn" data-side="log" title="Show the operation log">Log</button>
+          </div>
+          <div class="ide-body">
+            <div class="ide-problem"></div>
+            <div class="ide-split" title="Drag to resize · double-click to read the full problem"><i></i></div>
+            <div class="ide-toolbar">
+              <div class="lang-switch" role="group" aria-label="Language">
+                <button type="button" data-lang="py">Python</button>
+                <button type="button" data-lang="js">JavaScript</button>
+              </div>
+              <span class="ide-engine"></span>
+            </div>
+            <div class="editor">
+              <div class="ed-gutter" aria-hidden="true"></div>
+              <div class="ed-wrap">
+                <pre class="ed-hl" aria-hidden="true"><code></code></pre>
+                <textarea class="ed-input" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Code editor"></textarea>
+              </div>
+            </div>
+            <div class="ide-actions">
+              <button type="button" class="key" data-ide="run" title="Run the example tests (Ctrl+Enter)">Run</button>
+              <button type="button" class="key submit" data-ide="submit" title="Run every test (Ctrl+Shift+Enter)">Submit</button>
+              <span class="grow"></span>
+              <button type="button" class="term-btn" data-ide="reset" title="Back to the starter code">Reset</button>
+              <button type="button" class="term-btn" data-ide="solution" title="Load the reference solution">Solution</button>
+            </div>
+            <div class="ide-console" aria-live="polite"></div>
+          </div>
+        </section>
+      </aside>
+
+      <div class="scrim"></div>
+    </div>
+    <script src="lessons.js"></script>
+    <script src="dsa.js"></script>
+    <script src="app.js"></script>
+    <script src="ide.js"></script>
+    <script src="chat.js"></script>
+    <script src="builder.js"></script>
+  </body>
+</html>
