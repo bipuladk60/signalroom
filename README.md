@@ -2,6 +2,10 @@
 
 **System Design in Motion**: a control-room console for learning how big systems and interview algorithms actually behave, one request and one pointer move at a time.
 
+**Live:** https://claude.ai/artifact/47S5TKAAPp6vhTLxniQEQE
+
+If it helps you prepare, a ⭐ on this repo helps other people find it.
+
 Two sections, switched from the header:
 
 - **System design**: animated lessons on load balancing, CDNs, rate limiting, caching, replication, sharding, message queues, circuit breakers, and a full URL-shortener walkthrough. Requests travel between components on a zoomable scope, a live narration types out what's happening, and a signal log records every request.

@@ -580,3 +580,10 @@ body.sec-dsa .builder { display: none !important; }
 .editor { flex: 1 1 auto; min-height: 120px; }
 .ide-console { flex: 0 0 26%; min-height: 90px; }
 @media (max-width: 760px) { .sections button { padding: 0 9px; letter-spacing: 0.06em; } .ide { min-height: 760px; } }
+
+/* ---------- GitHub link (header) ---------- */
+.gh-link { text-decoration: none; gap: 8px; color: var(--ink-2); }
+.gh-link:hover { color: var(--ink); border-color: var(--amber-dim); }
+.gh-star { display: inline-flex; align-items: center; gap: 5px; padding-left: 8px; border-left: 1px solid var(--bezel-2); color: var(--amber); }
+.gh-link:hover .gh-star { text-shadow: 0 0 8px var(--amber-glow); }
+@media (max-width: 760px) { .gh-star { display: none; } .gh-link { padding: 0 10px; } }
