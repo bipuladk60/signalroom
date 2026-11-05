@@ -523,9 +523,24 @@ self.onmessage = async (e) => {
 
   const sideLog = (on) => document.body.classList.toggle('side-log', on)
   const idle = (fn) => (window.requestIdleCallback ? requestIdleCallback(fn, { timeout: 3000 }) : setTimeout(fn, 1500))
+  // the coding problem that goes with a lesson: its own, or (for a lesson Claude built from a problem)
+  // the problem it was built from. Other lessons in the coding section keep the last problem open.
+  function problemFor(l) {
+    if (!l) return null
+    if (l.code) return l
+    const all = typeof LESSONS !== 'undefined' ? LESSONS : []
+    if (l.practice) { const p = all.find((x) => x.id === l.practice && x.code); if (p) return p }
+    if (!(window.SDE.section && window.SDE.section() === 'dsa')) return null
+    // lessons built before they were linked: find the problem they name
+    const words = `${l.title || ''} ${l.prompt || ''} ${l.name || ''}`.toLowerCase()
+    const named = all.find((x) => x.code && words.includes(String(x.title).toLowerCase()))
+    if (named) return named
+    if (lesson) return lesson
+    return null
+  }
   function sync() {
-    const l = window.SDE.current()
-    const dsa = !!(l && l.code)
+    const l = problemFor(window.SDE.current())
+    const dsa = !!l
     document.body.classList.toggle('mode-dsa', dsa)
     if (!dsa) { sideLog(false); return }
     if (l !== lesson) load(l)
@@ -553,10 +568,11 @@ self.onmessage = async (e) => {
 
   window.SDE_IDE = {
     isSolved: (id) => !!solved[id],
+    active: () => !!lesson && lesson === problemFor(window.SDE.current()),
     // the code a "walk me through the code" lesson should explain: the learner's own code if they've
     // written any, otherwise the reference solution in their language
     codeForBuilder() {
-      if (!spec || !lesson || lesson !== window.SDE.current()) return null
+      if (!spec || !lesson || lesson !== problemFor(window.SDE.current())) return null
       const C = cur()
       const mine = ta.value.trim() && ta.value.trim() !== String(C.starter).trim()
       return { label: mine ? 'their own code' : `reference solution for ${lesson.title}`, lang: lang === 'py' ? 'python' : 'javascript', text: mine ? ta.value : C.solution }
@@ -570,7 +586,7 @@ self.onmessage = async (e) => {
       const C = cur()
       const fenceLang = lang === 'py' ? 'python' : 'js'
       const empty = !ta.value.trim() || ta.value.trim() === String(C.starter).trim()
-      return `Coding problem for this lesson (${spec.difficulty}): ${C.statement.replace(/<[^>]+>/g, '')}\nConstraints: ${(spec.constraints || []).map((c) => c.replace(/<[^>]+>/g, '')).join('; ')}\nThe learner is writing ${L}. ${empty ? 'Their editor is EMPTY: it still holds only the starter template, they have not written any code yet. So "the code" means the reference solution below.' : 'Their editor holds their own attempt:'}\n\`\`\`${fenceLang}\n${code}\n\`\`\`\n${r}\nReference solution in ${L} (use it whenever they ask for the solution, ask you to explain "the code", or don't know where to start; while they are debugging their own attempt, don't paste it unless they ask):\n\`\`\`${fenceLang}\n${C.solution}\n\`\`\`\nAnswer in ${L}.`
+      return `Coding problem for this lesson (${lesson.title}, ${spec.difficulty}): ${C.statement.replace(/<[^>]+>/g, '')}\nConstraints: ${(spec.constraints || []).map((c) => c.replace(/<[^>]+>/g, '')).join('; ')}\nThe learner is writing ${L}. ${empty ? 'Their editor is EMPTY: it still holds only the starter template, they have not written any code yet. So "the code" means the reference solution below.' : 'Their editor holds their own attempt:'}\n\`\`\`${fenceLang}\n${code}\n\`\`\`\n${r}\nReference solution in ${L} (use it whenever they ask for the solution, ask you to explain "the code", or don't know where to start; while they are debugging their own attempt, don't paste it unless they ask):\n\`\`\`${fenceLang}\n${C.solution}\n\`\`\`\nAnswer in ${L}.`
     },
   }
   sync()

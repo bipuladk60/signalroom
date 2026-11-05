@@ -244,6 +244,9 @@ ${codeCtx.text}
     try {
       const raw = await sample.json(prompt, { signal: ctl.signal, onText: ({ text }) => { written = text } })
       const lesson = normalize(raw, topic)
+      // a lesson built while on a coding problem keeps that problem, so the Code Lab stays open beside it
+      const practice = cur && cur.code ? cur.id : cur && cur.practice
+      if (practice && lesson.section === 'dsa') lesson.practice = practice
       const where = await saveLesson(lesson)
       window.SDE.addLessons([lesson], { select: true })
       input.value = ''

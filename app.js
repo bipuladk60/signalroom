@@ -1540,7 +1540,7 @@
         if (c) out.push(`Card on screen: ${strip(c.title)}: ${strip(c.what || '')} Memory hook: ${strip(c.hook || '')}`)
         if (S.tv.slide) out.push(`Slide on screen: ${strip(S.tv.slide.headline)}. ${strip(S.tv.slide.analogy || '')} ${(S.tv.slide.points || []).map(strip).join('; ')}`)
       }
-      if (window.SDE_IDE && lesson.code) out.push(window.SDE_IDE.context())
+      if (window.SDE_IDE && window.SDE_IDE.active()) out.push(window.SDE_IDE.context())
       const rows = S.rows.slice(-24)
       if (rows.length) {
         out.push(`Requests so far (oldest first):\n${rows
