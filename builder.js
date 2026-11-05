@@ -216,6 +216,15 @@ Teaching rules for every format:
     const cur = window.SDE.current()
     const codeCtx = window.SDE_IDE && window.SDE_IDE.codeForBuilder ? window.SDE_IDE.codeForBuilder() : null
     const all = (typeof LESSONS !== 'undefined' ? LESSONS : []).map((l) => `${l.name} (${l.title})`).join(', ')
+    // every coding lesson gets a problem to practise in the Code Lab: the open one, or one Claude picks
+    const openProblem = cur && cur.code ? cur.id : cur && cur.practice
+    const problems = (typeof LESSONS !== 'undefined' ? LESSONS : []).filter((l) => l.code)
+    const openTitle = openProblem ? (problems.find((l) => l.id === openProblem) || {}).title : ''
+    const pickAsk = window.SDE.section && window.SDE.section() === 'dsa' && problems.length
+      ? `
+
+This is the coding section: every lesson here comes with a practice problem in the Code Lab. Add a top-level "practice" field with the id of the problem below that best fits what this lesson teaches${openProblem ? `. The learner has "${openTitle}" (${openProblem}) open: keep it unless the lesson is clearly about something another problem practises better` : ' (if none fits closely, pick the nearest one)'}: ${problems.map((l) => `${l.id} (${l.title})`).join(', ')}.`
+      : ''
     const prompt = `${SPEC}
 
 The learner is currently viewing this lesson: ${briefOf(cur)}
@@ -227,7 +236,7 @@ The learner asks: ${topic}${codeCtx ? `
 Code in the learner's editor (${codeCtx.label}, ${codeCtx.lang}). When they say "the code", "my code" or "this solution", this is it:
 ---
 ${codeCtx.text}
----` : ''}`
+---` : ''}${pickAsk}`
 
     ctl = new AbortController()
     delete status.dataset.keep
@@ -245,7 +254,7 @@ ${codeCtx.text}
       const raw = await sample.json(prompt, { signal: ctl.signal, onText: ({ text }) => { written = text } })
       const lesson = normalize(raw, topic)
       // a lesson built while on a coding problem keeps that problem, so the Code Lab stays open beside it
-      const practice = cur && cur.code ? cur.id : cur && cur.practice
+      const practice = (problems.some((l) => l.id === raw.practice) ? raw.practice : null) || openProblem
       if (practice && lesson.section === 'dsa') lesson.practice = practice
       const where = await saveLesson(lesson)
       window.SDE.addLessons([lesson], { select: true })
