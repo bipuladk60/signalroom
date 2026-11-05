@@ -1,0 +1,9 @@
+# build output (generated from index.html by build-artifact.mjs)
+artifact.html
+
+# the original stdlib archive (shipped as pyodide/stdlib.json instead)
+pyodide/python_stdlib.zip
+
+.DS_Store
+Thumbs.db
+node_modules/
