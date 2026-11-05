@@ -553,6 +553,14 @@ self.onmessage = async (e) => {
 
   window.SDE_IDE = {
     isSolved: (id) => !!solved[id],
+    // the code a "walk me through the code" lesson should explain: the learner's own code if they've
+    // written any, otherwise the reference solution in their language
+    codeForBuilder() {
+      if (!spec || !lesson || lesson !== window.SDE.current()) return null
+      const C = cur()
+      const mine = ta.value.trim() && ta.value.trim() !== String(C.starter).trim()
+      return { label: mine ? 'their own code' : `reference solution for ${lesson.title}`, lang: lang === 'py' ? 'python' : 'javascript', text: mine ? ta.value : C.solution }
+    },
     context() {
       if (!spec) return ''
       const code = ta.value.length > 4000 ? ta.value.slice(0, 4000) + '\n…' : ta.value

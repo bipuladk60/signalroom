@@ -729,6 +729,12 @@
       case 'ptr':
         await movePtr(ev, run, true)
         break
+      case 'focus':
+      case 'card':
+      case 'slide':
+      case 'quiz':
+        await teachEvent(ev, run, true)
+        break
       case 'say':
         // the sentence finishes typing before the action it describes starts
         await narrate(ev.text, run)
@@ -748,6 +754,7 @@
       case 'rows': setRows(ev.at, ev.rows, ev.hl); break
       case 'edge': setEdge(ev.a, ev.b, ev.color); break
       case 'ptr': { const p = ensurePtr(ev.name, ev.color); p.at = ev.at; p.from = null; p.p = 1; S.ds.ptrs[ev.name] = ev.at; break }
+      case 'focus': case 'card': case 'slide': case 'quiz': teachEvent(ev, S.run, false, stepIdx); break
     }
   }
 
@@ -782,6 +789,13 @@
   }
   function rowEl(row) {
     const lesson = L()
+    if (row.note) {
+      const li = document.createElement('li')
+      li.className = `feed-item note c-${row.color}`
+      li.dataset.step = row.step
+      li.innerHTML = `<span class="fi-no"><b>◆</b> ${String(row.no).padStart(3, '0')}</span><div class="fi-main"><div class="fi-route">${esc(row.label)}</div><div class="fi-info">${esc(row.info)}</div><div class="fi-meta">${esc(row.kind)} · step ${row.step + 1}</div></div>`
+      return li
+    }
     const li = document.createElement('li')
     li.className = `feed-item c-${row.color}` + (row.lost ? ' is-lost' : '')
     li.dataset.step = row.step
@@ -901,6 +915,7 @@
     for (let i = k; i < n(); i++) {
       S.step = i
       S.busy = true
+      S.quizSkip = false
       renderStepUI()
       for (const ev of L().steps[i].events) {
         await doEvent(ev, run)
@@ -926,6 +941,7 @@
     S.vis.clear()
     for (const id in nodeEls) { setVisible(id, false); setDown(id, false); setBadge(id, null); setMeter(nodeEls[id], 0) }
     resetDS()
+    resetTeach()
     L().start.forEach((id) => setVisible(id, true))
     S.rows = []
     S.current = -1
@@ -935,6 +951,7 @@
     fitCamera(true)
     renderFeed()
     renderSeq()
+    if (isView(L())) renderTeach()
   }
 
   function selectLesson(id, { keepDrawer = false } = {}) {
@@ -964,6 +981,8 @@
     document.body.classList.toggle('sec-dsa', S.section === 'dsa')
     document.querySelectorAll('[data-section]').forEach((b) => { const on = b.dataset.section === S.section; b.classList.toggle('is-active', on); b.setAttribute('aria-selected', on) })
     $('.channels .label').textContent = S.section === 'dsa' ? 'Problems' : 'Channels'
+    $('.feed-card .label').textContent = isView(lesson) ? 'Takeaways' : 'Signal log'
+    buildTeach()
     renderRing()
     renderRail()
     if (!keepDrawer) setRail(false)
@@ -1007,7 +1026,7 @@
   }
   function toggle() { S.playing && !S.frozen ? pauseIt() : play() }
   function stepFwd() {
-    if (S.busy) { S.playing = false; S.frozen = false; renderControls(); return }
+    if (S.busy) { S.playing = false; S.frozen = false; S.quizSkip = true; renderControls(); return }
     S.playing = false
     if (S.step >= n()) { narrKey = ''; rebuild(0); runFrom(0); return }
     if (S.step < n() - 1) runFrom(S.step + 1)
@@ -1030,7 +1049,7 @@
     ['dsa', 'Coding interviews'],
   ]
   // the site has two separate sections; each keeps its own lesson list, progress and last lesson
-  const secOf = (l) => (l && l.cat === 'dsa' ? 'dsa' : 'sd')
+  const secOf = (l) => (l && l.section ? l.section : l && l.cat === 'dsa' ? 'dsa' : 'sd')
   const DSA_GROUPS = ['Arrays & hashing', 'Sorting & intervals', 'Binary search', 'Stacks, queues & design', 'Trees & graphs', 'Dynamic programming', 'More problems']
   function switchSection(sec) {
     if (sec === S.section) return
@@ -1043,8 +1062,8 @@
     const nav = $('.lesson-groups')
     let ch = 0
     const groups = S.section === 'dsa'
-      ? DSA_GROUPS.map((g) => [g, g, (l) => l.cat === 'dsa' && (l.group || 'More problems') === g])
-      : GROUPS.filter(([c]) => c !== 'dsa').map(([c, label]) => [c, label, (l) => l.cat === c])
+      ? [['mine', 'Your lessons', (l) => l.cat === 'mine' && secOf(l) === 'dsa'], ...DSA_GROUPS.map((g) => [g, g, (l) => l.cat === 'dsa' && (l.group || 'More problems') === g])]
+      : GROUPS.filter(([c]) => c !== 'dsa').map(([c, label]) => [c, label, (l) => l.cat === c && secOf(l) === 'sd'])
     nav.innerHTML = groups.map(([, label, match]) => {
       const items = LESSONS.filter(match)
       if (!items.length) return ''
@@ -1265,9 +1284,191 @@
     if (id && (!S.lesson || S.lesson.id !== id) && LESSONS.some((l) => l.id === id)) selectLesson(id)
   })
 
+  /* ---------------- teaching views: code walkthroughs and concept slides ----------------
+     Lessons with format "code" or "concept" play on an HTML stage over the scope instead of the
+     node diagram. Text fields arrive already escaped (builder.js normalises them); code is
+     escaped here. */
+  const viewEl = $('.lesson-view')
+  const isView = (l) => !!(l && l.format && l.format !== 'diagram')
+  const TV_KW = new Set('def class return if elif else for while in not and or is None True False import from as with try except finally raise lambda yield pass break continue global nonlocal del assert async await self const let var function new this of typeof instanceof null undefined true false switch case default throw catch extends super static'.split(' '))
+  const TV_RE = /(#[^\n]*|\/\/[^\n]*)|((?:[rRbBfF]{1,2})?(?:'(?:\\.|[^'\\])*'?|"(?:\\.|[^"\\])*"?|`(?:\\.|[^`\\])*`?))|(\b\d+(?:\.\d+)?\b)|([A-Za-z_$][\w$]*)(?=\s*\()|([A-Za-z_$][\w$]*)/g
+  function tvHL(src) {
+    let out = '', last = 0, m
+    TV_RE.lastIndex = 0
+    while ((m = TV_RE.exec(src))) {
+      if (!m[0]) { TV_RE.lastIndex++; continue }
+      out += esc(src.slice(last, m.index))
+      const [t, com, str, num, call, word] = m
+      if (com) out += `<span class="tk-com">${esc(t)}</span>`
+      else if (str) out += `<span class="tk-str">${esc(t)}</span>`
+      else if (num) out += `<span class="tk-num">${t}</span>`
+      else if (call) out += TV_KW.has(call) ? `<span class="tk-kw">${call}</span>` : `<span class="tk-fn">${call}</span>`
+      else out += TV_KW.has(word) ? `<span class="tk-kw">${word}</span>` : esc(word)
+      last = m.index + t.length
+    }
+    return out + esc(src.slice(last))
+  }
+  function resetTeach() {
+    S.tv = { focus: null, cards: [], current: -1, slide: null, quizzes: [], answered: {} }
+  }
+  resetTeach()
+  function buildTeach() {
+    const lesson = L()
+    stage.classList.toggle('fmt-view', isView(lesson))
+    stage.dataset.format = isView(lesson) ? lesson.format : ''
+    if (!isView(lesson)) { viewEl.innerHTML = ''; return }
+    resetTeach()
+    renderTeach()
+  }
+  function renderTeach() {
+    const lesson = L()
+    if (!isView(lesson)) return
+    if (lesson.format === 'code') {
+      const lines = String(lesson.source.text).replace(/\s+$/, '').split('\n')
+      const f = S.tv.focus
+      const inF = (n) => f && n >= f.lines[0] && n <= f.lines[1]
+      const lineHTML = (txt, n) => {
+        if (inF(n) && f.token) {
+          const i = txt.indexOf(f.token)
+          if (i >= 0) return tvHL(txt.slice(0, i)) + `<mark class="tv-tok">${tvHL(f.token)}</mark>` + tvHL(txt.slice(i + f.token.length))
+        }
+        return tvHL(txt)
+      }
+      viewEl.innerHTML = `
+        <div class="tv-code">
+          <section class="tv-src">
+            <div class="tv-head"><span class="label">Code</span><span class="tv-lang">${esc(lesson.source.lang || '')}</span></div>
+            <div class="tv-pre${f ? ' has-focus' : ''}">${lines.map((t, i) => `<div class="tv-line${inF(i + 1) ? ' is-focus' : ''}" data-n="${i + 1}"><span class="tv-ln">${i + 1}</span><span class="tv-lc">${lineHTML(t, i + 1) || ' '}</span></div>`).join('')}</div>
+          </section>
+          <section class="tv-side">${cardsHTML()}</section>
+        </div>`
+      const first = viewEl.querySelector('.tv-line.is-focus')
+      if (first) first.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    } else {
+      const sl = S.tv.slide
+      viewEl.innerHTML = `
+        <div class="tv-concept">
+          ${sl ? slideHTML(sl) : introHTML(lesson)}
+          ${quizHTML()}
+          ${S.tv.cards.length ? `<section class="tv-side tv-side-inline">${cardsHTML(true)}</section>` : ''}
+        </div>`
+    }
+    wireQuiz()
+    // a quiz waiting for an answer is the thing to look at: bring it into view
+    const q = viewEl.querySelector('.tv-quiz:not(.is-done)')
+    if (q) requestAnimationFrame(() => q.scrollIntoView({ block: 'center', behavior: 'smooth' }))
+  }
+  function introHTML(lesson) {
+    return `<div class="tv-slide tv-intro"><div class="tv-kicker">${lesson.format === 'code' ? 'Code walkthrough' : 'Concept lesson'}</div><h3 class="tv-headline">${esc(lesson.title)}</h3><p class="tv-lead">${lesson.overview.description}</p><ol class="tv-plan">${lesson.steps.map((s) => `<li>${esc(s.title)}</li>`).join('')}</ol></div>`
+  }
+  function slideHTML(s) {
+    let vis = ''
+    const v = s.visual
+    if (v && v.type === 'compare') vis = `<div class="tv-compare">${[v.left, v.right].map((c) => `<div class="tv-col"><h5>${c.title}</h5><ul>${c.items.map((x) => `<li>${x}</li>`).join('')}</ul></div>`).join('<div class="tv-vs">vs</div>')}</div>`
+    else if (v && v.type === 'flow') vis = `<div class="tv-flow">${v.items.map((x, i) => `<div class="tv-chip" style="--i:${i}">${x}</div>`).join('<span class="tv-arrow">→</span>')}</div>`
+    else if (v && v.type === 'big') vis = `<div class="tv-big">${v.text}</div>`
+    else if (v && v.type === 'code') vis = `<pre class="tv-snippet">${tvHL(v.code)}</pre>`
+    return `<div class="tv-slide is-in">
+      ${s.kicker ? `<div class="tv-kicker">${s.kicker}</div>` : ''}
+      <h3 class="tv-headline">${s.headline}</h3>
+      ${s.analogy ? `<div class="tv-analogy"><span>Think of it like</span><p>${s.analogy}</p></div>` : ''}
+      ${s.points && s.points.length ? `<ul class="tv-points">${s.points.map((p) => `<li>${p}</li>`).join('')}</ul>` : ''}
+      ${vis}
+    </div>`
+  }
+  function cardHTML(c, big) {
+    return `<article class="tv-card k-${c.kind.replace(/[^a-z]/g, '')}${big ? ' is-now' : ''}">
+      <div class="tv-card-kind">${esc(c.kind)}</div>
+      <h4>${c.title}</h4>
+      ${c.what ? `<p class="tv-what">${c.what}</p>` : ''}
+      ${c.hook ? `<div class="tv-hook"><span>Memory hook</span><p>${c.hook}</p></div>` : ''}
+      ${c.example ? `<div class="tv-ex"><pre>${tvHL(c.example.code)}</pre>${c.example.out ? `<div class="tv-out"><span>→</span><pre>${esc(c.example.out)}</pre></div>` : ''}</div>` : ''}
+      ${c.gotcha ? `<div class="tv-gotcha"><span>Gotcha</span><p>${c.gotcha}</p></div>` : ''}
+    </article>`
+  }
+  function cardsHTML(inline) {
+    const cs = S.tv.cards
+    if (!cs.length) return inline ? '' : `<div class="tv-empty">Cards explaining each idea appear here as the walkthrough plays.</div>`
+    const now = S.tv.current >= 0 ? S.tv.current : cs.length - 1
+    const others = cs.map((c, i) => ({ c, i })).filter(({ i }) => i !== now)
+    const pending = S.tv.quizzes.length && S.tv.answered[S.tv.quizzes.length - 1] == null
+    return `${pending ? quizHTML(true) : ''}${cardHTML(cs[now], true)}${pending ? '' : quizHTML(true)}${others.length ? `<div class="tv-recap"><div class="label">Earlier</div>${others.reverse().map(({ c, i }) => `<button type="button" class="tv-mini" data-card="${i}"><b>${c.title}</b><span>${c.hook || c.what || ''}</span></button>`).join('')}</div>` : ''}`
+  }
+  // quizzes: the newest unanswered (or just-answered) quiz of the current step
+  function quizHTML(inCards) {
+    const L0 = L()
+    if (!S.tv.quizzes.length) return ''
+    if ((L0.format === 'code') !== !!inCards) return ''
+    const qi = S.tv.quizzes.length - 1
+    const q = S.tv.quizzes[qi]
+    const a = S.tv.answered[qi]
+    return `<article class="tv-quiz${a != null ? ' is-done' : ''}" data-q="${qi}">
+      <div class="tv-card-kind">Quick check</div>
+      <h4>${q.q}</h4>
+      <div class="tv-opts">${q.options.map((o, i) => `<button type="button" class="tv-opt${a != null ? (i === q.answer ? ' is-right' : i === a ? ' is-wrong' : '') : ''}" data-opt="${i}"${a != null ? ' disabled' : ''}><b>${'ABCDE'[i]}</b><span>${o}</span></button>`).join('')}</div>
+      ${a != null ? `<p class="tv-why"><b>${a === q.answer ? 'Right.' : 'Not quite.'}</b> ${q.why}</p>` : '<p class="tv-wait">Pick an answer to continue.</p>'}
+    </article>`
+  }
+  let quizResolve = null
+  function wireQuiz() {
+    viewEl.querySelectorAll('.tv-opt:not([disabled])').forEach((b) => b.addEventListener('click', () => {
+      const qi = +b.closest('.tv-quiz').dataset.q
+      S.tv.answered[qi] = +b.dataset.opt
+      renderTeach()
+      if (quizResolve) { const r = quizResolve; quizResolve = null; setTimeout(r, 900) }
+    }))
+    viewEl.querySelectorAll('.tv-mini').forEach((b) => b.addEventListener('click', () => { S.tv.current = +b.dataset.card; renderTeach() }))
+  }
+  function addNote(title, info, kind, color, live, stepIdx = S.step) {
+    const row = { note: true, no: S.rows.length + 1, step: stepIdx, path: [], from: null, to: null, color, label: title, payload: [], lost: false, t: '', kind, info, size: '' }
+    S.rows.push(row)
+    if (live) {
+      S.current = S.rows.length - 1
+      feed.querySelector('.feed-empty')?.remove()
+      feed.querySelector('.is-current')?.classList.remove('is-current')
+      const li = rowEl(row)
+      li.classList.add('is-current', 'is-new')
+      feed.appendChild(li)
+      feedCount.textContent = `${S.rows.length}`
+      requestAnimationFrame(() => feed.scrollTo({ top: feed.scrollHeight, behavior: 'smooth' }))
+    }
+  }
+  async function teachEvent(ev, run, live, stepIdx = S.step) {
+    if (ev.type === 'focus') {
+      S.tv.focus = { lines: ev.lines, token: ev.token || '' }
+      if (live) { renderTeach(); await wait(450, run) }
+    } else if (ev.type === 'card') {
+      S.tv.cards.push(ev.card)
+      S.tv.current = S.tv.cards.length - 1
+      addNote(strip(ev.card.title), strip(ev.card.hook || ev.card.what || ''), ev.card.kind.toUpperCase().slice(0, 9), 'teal', live, stepIdx)
+      if (live) { renderTeach(); await wait(700, run) }
+    } else if (ev.type === 'slide') {
+      S.tv.slide = ev.slide
+      addNote(strip(ev.slide.headline), strip(ev.slide.analogy || (ev.slide.points || [])[0] || ''), 'IDEA', 'violet', live, stepIdx)
+      if (live) { renderTeach(); await wait(800, run) }
+    } else if (ev.type === 'quiz') {
+      S.tv.quizzes.push(ev.quiz)
+      const qi = S.tv.quizzes.length - 1
+      if (!live) { S.tv.answered[qi] = ev.quiz.answer; addNote('Quick check', strip(ev.quiz.q), 'QUIZ', 'amber', false, stepIdx); return }
+      renderTeach()
+      // wait for the learner: answering is the point. Step/next skips it.
+      await new Promise((resolve) => {
+        let done = false
+        const finish = () => { if (!done) { done = true; resolve() } }
+        quizResolve = finish
+        const poll = () => { if (done) return; if (run.cancelled || S.quizSkip) return finish(); setTimeout(poll, 150) }
+        setTimeout(poll, 150)
+      })
+      quizResolve = null
+      if (S.tv.answered[qi] == null) { S.tv.answered[qi] = ev.quiz.answer; renderTeach() }
+      addNote('Quick check', strip(ev.quiz.q), 'QUIZ', 'amber', live)
+    }
+  }
+
   /* ---------------- API for the Claude features (chat.js, builder.js) ---------------- */
   window.SDE = {
     current: () => L(),
+    section: () => S.section || 'sd',
     addLessons(list, { select = false } = {}) {
       let pick = null
       for (const lesson of list) {
@@ -1330,6 +1531,13 @@
         for (const id in S.ds.rows) if (S.ds.rows[id].length) out.push(`${lesson.nodes[id].name}: ${S.ds.rows[id].join(' | ')}`)
         const ps = Object.entries(S.ds.ptrs).filter(([, at]) => at).map(([p, at]) => `${p}→${name(at)}`)
         if (ps.length) out.push(`Pointers: ${ps.join(', ')}.`)
+      }
+      if (isView(lesson)) {
+        if (lesson.format === 'code') out.push(`Code being walked through (${lesson.source.lang}):\n\`\`\`\n${lesson.source.text}\n\`\`\``)
+        if (S.tv.focus) out.push(`Currently highlighted: lines ${S.tv.focus.lines[0]}-${S.tv.focus.lines[1]}${S.tv.focus.token ? `, "${S.tv.focus.token}"` : ''}.`)
+        const c = S.tv.cards[S.tv.current]
+        if (c) out.push(`Card on screen: ${strip(c.title)}: ${strip(c.what || '')} Memory hook: ${strip(c.hook || '')}`)
+        if (S.tv.slide) out.push(`Slide on screen: ${strip(S.tv.slide.headline)}. ${strip(S.tv.slide.analogy || '')} ${(S.tv.slide.points || []).map(strip).join('; ')}`)
       }
       if (window.SDE_IDE && lesson.code) out.push(window.SDE_IDE.context())
       const rows = S.rows.slice(-24)
