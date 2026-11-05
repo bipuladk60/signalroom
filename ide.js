@@ -567,7 +567,10 @@ self.onmessage = async (e) => {
       let r = 'No run yet.'
       if (lastRun) r = lastRun.fatal ? `Last ${lastRun.mode}: error before tests ran: ${lastRun.fatal}` : `Last ${lastRun.mode}: ${lastRun.pass}/${lastRun.total} passed${lastRun.failedAt ? `, failed test ${lastRun.failedAt} (${lastRun.why})` : ''}.`
       const L = lang === 'py' ? 'Python' : 'JavaScript'
-      return `Coding problem for this lesson (${spec.difficulty}): ${cur().statement.replace(/<[^>]+>/g, '')}\nConstraints: ${(spec.constraints || []).map((c) => c.replace(/<[^>]+>/g, '')).join('; ')}\nThe learner is writing ${L}. Their code in the editor:\n\`\`\`${lang === 'py' ? 'python' : 'js'}\n${code}\n\`\`\`\n${r}\n(When they ask for help with their code, give hints and point at the bug before handing over a full solution, unless they ask for the solution. Answer in ${L}.)`
+      const C = cur()
+      const fenceLang = lang === 'py' ? 'python' : 'js'
+      const empty = !ta.value.trim() || ta.value.trim() === String(C.starter).trim()
+      return `Coding problem for this lesson (${spec.difficulty}): ${C.statement.replace(/<[^>]+>/g, '')}\nConstraints: ${(spec.constraints || []).map((c) => c.replace(/<[^>]+>/g, '')).join('; ')}\nThe learner is writing ${L}. ${empty ? 'Their editor is EMPTY: it still holds only the starter template, they have not written any code yet. So "the code" means the reference solution below.' : 'Their editor holds their own attempt:'}\n\`\`\`${fenceLang}\n${code}\n\`\`\`\n${r}\nReference solution in ${L} (use it whenever they ask for the solution, ask you to explain "the code", or don't know where to start; while they are debugging their own attempt, don't paste it unless they ask):\n\`\`\`${fenceLang}\n${C.solution}\n\`\`\`\nAnswer in ${L}.`
     },
   }
   sync()
